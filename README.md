@@ -2,18 +2,6 @@
 
 A real-time multiplayer dungeon crawler game built with **Svelte**, **Node.js/Express**, **Socket.IO**, and **PostgreSQL**.
 
----
-
-## 📋 Table of Contents
-
-- [Tech Stack](#tech-stack)
-- [Prerequisites](#prerequisites)
-- [First-Time Setup](#first-time-setup)
-- [Running the Project](#running-the-project)
-- [Environment Variables](#environment-variables)
-- [Game Features](#game-features)
-
----
 
 ## 🚀 First-Time Setup
 
