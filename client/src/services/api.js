@@ -1,0 +1,83 @@
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
+
+export async function fetchAPI(endpoint, options = {}) {
+    const config = {
+        ...options,
+        credentials: 'include',
+        headers: {
+            'Content-Type': 'application/json',
+            ...options.headers,
+        },
+    };
+
+    const response = await fetch(`${API_URL}${endpoint}`, config);
+
+    if (!response.ok) {
+        const error = await response.json().catch(() => ({ error: 'Request failed' }));
+        throw new Error(error.error || 'API Error');
+    }
+
+    return response.json();
+}
+
+export async function register(username, email, password) {
+    return fetchAPI('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ username, email, password })
+    });
+}
+
+export async function login(email, password) {
+    return fetchAPI('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password })
+    });
+}
+
+export async function logout() {
+    return fetchAPI('/auth/logout', {
+        method: 'POST'
+    });
+}
+
+export async function getCurrentUser() {
+    return fetchAPI('/auth/me');
+}
+
+export async function getCharacters() {
+    return fetchAPI('/characters');
+}
+
+export async function getCharacter(id) {
+    return fetchAPI(`/characters/${id}`);
+}
+
+export async function createCharacter(name, characterClass) {
+    return fetchAPI('/characters', {
+        method: 'POST',
+        body: JSON.stringify({ name, class: characterClass })
+    });
+}
+
+export async function deleteCharacter(id) {
+    return fetchAPI(`/characters/${id}`, {
+        method: 'DELETE'
+    });
+}
+
+export async function getInventory(characterId) {
+    return fetchAPI(`/characters/${characterId}/inventory`);
+}
+
+export async function equipInventoryItem(characterId, inventoryId) {
+    return fetchAPI(`/characters/${characterId}/inventory/equip`, {
+        method: 'POST',
+        body: JSON.stringify({ inventoryId })
+    });
+}
+
+export async function dropInventoryItem(characterId, inventoryId) {
+    return fetchAPI(`/characters/${characterId}/inventory/${inventoryId}`, {
+        method: 'DELETE'
+    });
+}
