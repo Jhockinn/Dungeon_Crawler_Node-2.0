@@ -179,41 +179,21 @@
   }
 
   async function handleLogout() {
-    toast((t) => `
-      <div style="display:flex;flex-direction:column;gap:8px;min-width:200px">
-        <span>Are you sure you want to logout?</span>
-        <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button id="toast-logout-confirm-${t.id}" style="padding:4px 12px;background:#f44336;color:#fff;border:none;border-radius:4px;cursor:pointer">Logout</button>
-          <button id="toast-logout-cancel-${t.id}" style="padding:4px 12px;background:#333;color:#fff;border:none;border-radius:4px;cursor:pointer">Cancel</button>
-        </div>
-      </div>
-    `, { duration: Infinity, id: 'logout-confirm' });
-
-    const handler = async (e) => {
-      if (e.target.id && e.target.id.startsWith('toast-logout-confirm-')) {
-        toast.dismiss('logout-confirm');
-        document.removeEventListener('click', handler);
-        try {
-          const { logout } = await import('./services/api');
-          await logout();
-          authStore.logout();
-          currentRoute = ROUTES.LOGIN;
-          navigateTo(ROUTES.LOGIN);
-          chatOpen = false;
-          globalMessages = [];
-          partyMessages = [];
-          globalUnread = 0;
-          partyUnread = 0;
-          chatListenersRegistered = false;
-        } catch (error) {
-          toast.error('Logout failed. Please try again.');
-        }
-      } else if (e.target.id && e.target.id.startsWith('toast-logout-cancel-')) {
-        toast.dismiss('logout-confirm');
-        document.removeEventListener('click', handler);
-      }
-    };
-    document.addEventListener('click', handler);
+    try {
+      const { logout } = await import('./services/api');
+      await logout();
+      authStore.logout();
+      currentRoute = ROUTES.LOGIN;
+      navigateTo(ROUTES.LOGIN);
+      chatOpen = false;
+      globalMessages = [];
+      partyMessages = [];
+      globalUnread = 0;
+      partyUnread = 0;
+      chatListenersRegistered = false;
+    } catch (error) {
+      toast.error('Logout failed. Please try again.');
+    }
   }
 
   $: totalUnread = globalUnread + partyUnread;
