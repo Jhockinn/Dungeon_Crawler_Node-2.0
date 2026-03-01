@@ -5,8 +5,6 @@ const connectedUsers = new Map();
 
 export function setupSockets(io) {
     io.on('connection', (socket) => {
-        console.log('User connected:', socket.id);
-
         const userId = socket.request.session?.userId;
         if (userId) connectedUsers.set(userId, socket);
 
@@ -27,7 +25,6 @@ export function setupSockets(io) {
         gameSocket(io, socket, connectedUsers);
 
         socket.on('disconnect', () => {
-            console.log('User disconnected:', socket.id);
             if (userId) connectedUsers.delete(userId);
         });
     });

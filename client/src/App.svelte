@@ -49,6 +49,13 @@
   // We listen after mount so the socket is connected
   let chatListenersRegistered = false;
 
+  function startChatListenerRetry() {
+    const tryRegister = setInterval(() => {
+      registerChatListeners();
+      if (chatListenersRegistered) clearInterval(tryRegister);
+    }, 500);
+  }
+
   function registerChatListeners() {
     if (chatListenersRegistered) return;
     const sock = getSocket();
@@ -139,12 +146,7 @@
       authStore.setLoading(false);
     }
 
-    // Try to register listeners now; if socket isn't connected yet,
-    // we retry via a short interval until it connects
-    const tryRegister = setInterval(() => {
-      registerChatListeners();
-      if (chatListenersRegistered) clearInterval(tryRegister);
-    }, 500);
+    startChatListenerRetry();
   });
 
   onDestroy(() => {
@@ -158,10 +160,7 @@
     navigateTo(ROUTES.GAME);
     // Re-try registering chat listeners after login (socket connects on game mount)
     chatListenersRegistered = false;
-    const tryRegister = setInterval(() => {
-      registerChatListeners();
-      if (chatListenersRegistered) clearInterval(tryRegister);
-    }, 500);
+    startChatListenerRetry();
   }
 
   function handleShowRegister() {

@@ -12,7 +12,6 @@ const createTransporter = async () => {
     const hasGmailConfig = process.env.EMAIL_USER && process.env.EMAIL_PASS;
 
     if (hasGmailConfig) {
-        console.log('Using Gmail SMTP with:', process.env.EMAIL_USER);
         transporter = nodemailer.createTransport({
             service: 'gmail',
             auth: {
@@ -20,9 +19,7 @@ const createTransporter = async () => {
                 pass: process.env.EMAIL_PASS
             }
         });
-        console.log('Gmail transporter created');
     } else {
-        console.log('Creating Ethereal test email account...');
         const testAccount = await nodemailer.createTestAccount();
 
         transporter = nodemailer.createTransport({
@@ -34,9 +31,6 @@ const createTransporter = async () => {
                 pass: testAccount.pass
             }
         });
-
-        console.log('Ethereal account created:', testAccount.user);
-        console.log('To use Gmail instead, set EMAIL_USER and EMAIL_PASS in .env');
     }
 
     return transporter;

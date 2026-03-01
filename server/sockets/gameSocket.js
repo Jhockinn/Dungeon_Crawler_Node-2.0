@@ -63,18 +63,31 @@ async function fetchInventory(characterId) {
     return result.rows;
 }
 
+// ── Heal character to full HP and return new health values ──
+async function healCharacterToFull(characterId) {
+    await pool.query('UPDATE characters SET health = max_health WHERE id = $1', [characterId]);
+    const result = await pool.query('SELECT health, max_health FROM characters WHERE id = $1', [characterId]);
+    return result.rows[0];
+}
+
+// ── Mark a dungeon session as ended in the DB ─────────────
+async function closeSession(sessionId) {
+    await pool.query(
+        'UPDATE dungeon_sessions SET ended_at = NOW(), is_active = FALSE WHERE id = $1',
+        [sessionId]
+    );
+}
+
+// ── Remove a player from in-memory dungeon; delete dungeon if empty ──
+function removePlayer(dungeon, characterId, sessionId) {
+    dungeon.players.delete(characterId);
+    if (dungeon.players.size === 0) activeDungeons.delete(sessionId);
+}
+
 function calculateXPForLevel(level) {
     return Math.floor(100 * Math.pow(level, 1.5));
 }
 
-function calculateEnemyXP(enemyName, difficulty) {
-    const baseXP = {
-        'Goblin': 15,
-        'Skeleton': 25,
-        'Orc': 40
-    };
-    return Math.floor((baseXP[enemyName] || 10) * (1 + difficulty * 0.2));
-}
 
 async function checkLevelUp(characterId) {
     const result = await pool.query(
@@ -134,9 +147,9 @@ function spawnEnemies(maze, difficulty) {
     }
 
     const enemyTypes = [
-        { name: 'Goblin', health: 30, attack: 5, sprite: '👹' },
-        { name: 'Skeleton', health: 40, attack: 8, sprite: '💀' },
-        { name: 'Orc', health: 60, attack: 12, sprite: '🧟' }
+        { name: 'Goblin',   health: 30, attack: 5,  sprite: '👹', baseXP: 15 },
+        { name: 'Skeleton', health: 40, attack: 8,  sprite: '💀', baseXP: 25 },
+        { name: 'Orc',      health: 60, attack: 12, sprite: '🧟', baseXP: 40 }
     ];
 
     for (let i = 0; i < Math.min(enemyCount, walkablePositions.length); i++) {
@@ -324,29 +337,14 @@ export default function (io, socket, connectedUsers = new Map()) {
                             remaining: aliveEnemies.length
                         });
                     } else {
-                        await pool.query(`
-                            UPDATE characters
-                            SET health = max_health
-                            WHERE id = $1
-                        `, [characterId]);
-
-                        const charResult = await pool.query(
-                            'SELECT health, max_health FROM characters WHERE id = $1',
-                            [characterId]
-                        );
-
-                        await pool.query(`
-                            UPDATE dungeon_sessions
-                            SET ended_at = NOW(), is_active = FALSE
-                            WHERE id = $1
-                        `, [sessionId]);
-
+                        const healed = await healCharacterToFull(characterId);
+                        await closeSession(sessionId);
                         socket.emit('dungeonCompleted', {
                             sessionId,
                             message: 'Victory! You escaped the dungeon!',
                             healed: true,
-                            health: charResult.rows[0].health,
-                            maxHealth: charResult.rows[0].max_health
+                            health: healed.health,
+                            maxHealth: healed.max_health
                         });
                     }
                 }
@@ -391,7 +389,7 @@ export default function (io, socket, connectedUsers = new Map()) {
                 enemy.health = 0;
                 enemy.isAlive = false;
 
-                const xpGained = calculateEnemyXP(enemy.name, dungeon.difficulty);
+                const xpGained = Math.floor((enemy.baseXP || 10) * (1 + dungeon.difficulty * 0.2));
 
                 await pool.query(`
                     UPDATE characters 
@@ -487,34 +485,15 @@ export default function (io, socket, connectedUsers = new Map()) {
                     });
 
                     if (updatedHealth <= 0) {
-                        await pool.query(`
-                            UPDATE characters 
-                            SET health = max_health
-                            WHERE id = $1
-                        `, [characterId]);
-
-                        const healedChar = await pool.query(
-                            'SELECT health, max_health FROM characters WHERE id = $1',
-                            [characterId]
-                        );
-
-                        await pool.query(`
-                            UPDATE dungeon_sessions 
-                            SET ended_at = NOW(), is_active = FALSE
-                            WHERE id = $1
-                        `, [sessionId]);
-
-                        dungeon.players.delete(characterId);
-                        if (dungeon.players.size === 0) {
-                            activeDungeons.delete(sessionId);
-                        }
-
+                        const healed = await healCharacterToFull(characterId);
+                        await closeSession(sessionId);
+                        removePlayer(dungeon, characterId, sessionId);
                         socket.emit('playerDied', {
                             characterId,
                             message: 'You have been defeated!',
                             healed: true,
-                            health: healedChar.rows[0].health,
-                            maxHealth: healedChar.rows[0].max_health
+                            health: healed.health,
+                            maxHealth: healed.max_health
                         });
                     }
                 }
@@ -545,25 +524,11 @@ export default function (io, socket, connectedUsers = new Map()) {
                         remaining: aliveEnemies.length
                     });
                 }
-
-                dungeon.players.delete(characterId);
-                if (dungeon.players.size === 0) {
-                    activeDungeons.delete(sessionId);
-                }
+                removePlayer(dungeon, characterId, sessionId);
             }
 
-            await pool.query(`
-                UPDATE characters
-                SET health = max_health
-                WHERE id = $1
-            `, [characterId]);
-
-            await pool.query(`
-                UPDATE dungeon_sessions 
-                SET ended_at = NOW(), is_active = FALSE
-                WHERE id = $1
-            `, [sessionId]);
-
+            await healCharacterToFull(characterId);
+            await closeSession(sessionId);
             socket.leave(`dungeon_${sessionId}`);
         } catch (error) {
             console.error('Leave dungeon error:', error);
@@ -730,17 +695,12 @@ export default function (io, socket, connectedUsers = new Map()) {
             const verification = await verifyCharacterOwnership(characterId, userId);
             if (!verification.valid) return socket.emit('error', { message: verification.error });
 
-            const dungeon = activeDungeons.get(sessionId);
+            // sessionId arrives as a string from the text input on the client.
+            // activeDungeons keys are integers (SERIAL from PostgreSQL), so convert
+            // before the lookup — Map.get("5") !== Map.get(5).
+            const sessionKey = Number(sessionId);
+            const dungeon = activeDungeons.get(sessionKey);
             if (!dungeon) return socket.emit('error', { message: 'Dungeon not found. Check your code.' });
-
-            // Verify session is still active in DB
-            const sessionResult = await pool.query(
-                'SELECT id FROM dungeon_sessions WHERE id = $1 AND is_active = TRUE',
-                [sessionId]
-            );
-            if (sessionResult.rows.length === 0) {
-                return socket.emit('error', { message: 'That dungeon session has ended.' });
-            }
 
             const charResult = await pool.query('SELECT * FROM characters WHERE id = $1', [characterId]);
             if (charResult.rows.length === 0) return socket.emit('error', { message: 'Character not found' });
@@ -755,13 +715,14 @@ export default function (io, socket, connectedUsers = new Map()) {
                 bonusDefense: bonuses.bonusDefense
             });
 
-            socket.join(`dungeon_${sessionId}`);
+            socket.join(`dungeon_${sessionKey}`);
 
             const inventory = await fetchInventory(characterId);
 
-            // Send full dungeon state to the joining player
+            // Return sessionKey (number) so the client stores a number in gameStore,
+            // keeping the type consistent with move/attack/leaveDungeon events.
             socket.emit('dungeonReady', {
-                sessionId,
+                sessionId: sessionKey,
                 maze: dungeon.maze,
                 enemies: dungeon.enemies,
                 spawnPoint: { x: 1, y: 1 },
@@ -787,7 +748,7 @@ export default function (io, socket, connectedUsers = new Map()) {
             });
 
             // Notify existing players that someone joined
-            socket.to(`dungeon_${sessionId}`).emit('playerJoined', {
+            socket.to(`dungeon_${sessionKey}`).emit('playerJoined', {
                 characterId: character.id,
                 characterName: character.name,
                 characterClass: character.class,
@@ -918,9 +879,8 @@ export default function (io, socket, connectedUsers = new Map()) {
         for (const [sessionId, dungeon] of activeDungeons) {
             for (const [cId, pData] of dungeon.players) {
                 if (pData.socketId === socket.id) {
-                    dungeon.players.delete(cId);
+                    removePlayer(dungeon, cId, sessionId);
                     socket.to(`dungeon_${sessionId}`).emit('playerLeft', { characterId: cId });
-                    if (dungeon.players.size === 0) activeDungeons.delete(sessionId);
                     return;
                 }
             }

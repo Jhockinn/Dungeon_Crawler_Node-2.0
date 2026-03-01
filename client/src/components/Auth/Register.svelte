@@ -9,6 +9,7 @@
   let email = '';
   let password = '';
   let confirmPassword = '';
+  let gdprConsent = false;
   let loading = false;
 
   async function handleRegister() {
@@ -19,6 +20,11 @@
 
     if (password.length < 6) {
       toast.error('Password must be at least 6 characters');
+      return;
+    }
+
+    if (!gdprConsent) {
+      toast.error('You must accept the privacy policy to register');
       return;
     }
 
@@ -83,6 +89,17 @@
       />
     </div>
 
+    <div class="form-group gdpr">
+      <label class="gdpr-label">
+        <input
+          type="checkbox"
+          bind:checked={gdprConsent}
+          disabled={loading}
+        />
+        I agree that my username and email are stored to provide the service, in accordance with GDPR.
+      </label>
+    </div>
+
     <button type="submit" disabled={loading}>
       {loading ? 'Registering...' : 'Register'}
     </button>
@@ -114,5 +131,24 @@
 
   button {
     width: 100%;
+  }
+
+  .gdpr {
+    margin-top: 0.5em;
+  }
+
+  .gdpr-label {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5em;
+    font-size: 0.85em;
+    color: #aaa;
+    cursor: pointer;
+  }
+
+  .gdpr-label input {
+    width: auto;
+    margin-top: 2px;
+    flex-shrink: 0;
   }
 </style>

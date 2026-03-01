@@ -1,5 +1,19 @@
 import pool from '../config/database.js';
 
+const CLASS_STATS = {
+    warrior: { health: 150, attack: 15, defense: 10 },
+    mage:    { health: 80,  attack: 20, defense: 3  },
+    rogue:   { health: 100, attack: 18, defense: 5  }
+};
+
+async function ownsCharacter(id, userId) {
+    const result = await pool.query(
+        'SELECT id FROM characters WHERE id = $1 AND user_id = $2',
+        [id, userId]
+    );
+    return result.rows.length > 0;
+}
+
 export const getAll = async (req, res) => {
     try {
         const userId = req.user.userId;
@@ -50,15 +64,7 @@ export const create = async (req, res) => {
             return res.status(400).json({ error: 'Invalid class. Choose: warrior, mage, or rogue' });
         }
 
-        let stats = { health: 100, attack: 10, defense: 5 };
-
-        if (characterClass === 'warrior') {
-            stats = { health: 150, attack: 15, defense: 10 };
-        } else if (characterClass === 'mage') {
-            stats = { health: 80, attack: 20, defense: 3 };
-        } else if (characterClass === 'rogue') {
-            stats = { health: 100, attack: 18, defense: 5 };
-        }
+        const stats = CLASS_STATS[characterClass];
 
         const result = await pool.query(`
             INSERT INTO characters
@@ -98,11 +104,7 @@ export const getInventory = async (req, res) => {
         const { id } = req.params;
         const userId = req.user.userId;
 
-        const charResult = await pool.query(
-            'SELECT id FROM characters WHERE id = $1 AND user_id = $2',
-            [id, userId]
-        );
-        if (charResult.rows.length === 0) {
+        if (!(await ownsCharacter(id, userId))) {
             return res.status(404).json({ error: 'Character not found' });
         }
 
@@ -128,11 +130,7 @@ export const equipItem = async (req, res) => {
         const { inventoryId } = req.body;
         const userId = req.user.userId;
 
-        const charResult = await pool.query(
-            'SELECT id FROM characters WHERE id = $1 AND user_id = $2',
-            [id, userId]
-        );
-        if (charResult.rows.length === 0) {
+        if (!(await ownsCharacter(id, userId))) {
             return res.status(404).json({ error: 'Character not found' });
         }
 
@@ -188,11 +186,7 @@ export const dropItem = async (req, res) => {
         const { id, inventoryId } = req.params;
         const userId = req.user.userId;
 
-        const charResult = await pool.query(
-            'SELECT id FROM characters WHERE id = $1 AND user_id = $2',
-            [id, userId]
-        );
-        if (charResult.rows.length === 0) {
+        if (!(await ownsCharacter(id, userId))) {
             return res.status(404).json({ error: 'Character not found' });
         }
 

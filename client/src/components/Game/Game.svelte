@@ -4,7 +4,8 @@
     connectSocket,
     disconnectSocket,
     joinDungeon,
-    onDungeonReady
+    onDungeonReady,
+    onGameError
   } from '../../services/socketService';
   import { getCharacters } from '../../services/api';
   import CharacterSelect from '../Character/CharacterSelect.svelte';
@@ -45,6 +46,15 @@
         pendingDungeonData = data;
         // selectedCharacter is already set from the join-panel dropdown
         currentView = 'game';
+      }
+    });
+
+    // Show socket errors immediately instead of waiting for the 6-second timeout
+    onGameError((data) => {
+      if (joinLoading) {
+        joinLoading = false;
+        selectedCharacter = null;
+        toast.error(data?.message || 'Something went wrong', { duration: 4000 });
       }
     });
   });

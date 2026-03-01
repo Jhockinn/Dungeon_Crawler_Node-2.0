@@ -29,7 +29,6 @@ export const register = async (req, res) => {
 
         try {
             await emailService.sendVerificationEmail(user);
-            console.log('Verification email sent to:', user.email);
         } catch (emailError) {
             console.error('Failed to send verification email:', emailError.message);
         }

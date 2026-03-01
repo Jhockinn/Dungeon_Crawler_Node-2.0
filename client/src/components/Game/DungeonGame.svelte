@@ -27,7 +27,8 @@
     onExistingPlayers,
     giftItem,
     onGiftSent,
-    onGiftReceived
+    onGiftReceived,
+    onGameError
   } from '../../services/socketService';
   import { getInventory, equipInventoryItem, dropInventoryItem } from '../../services/api';
 
@@ -345,6 +346,12 @@
       toast.success(`🎁 ${data.fromUsername} sent you ${data.itemSpriteIcon} ${data.itemName}!`, { duration: 4000 });
       // Reload inventory from server
       getInventory(character.id).then(inv => { inventory = inv; }).catch(() => {});
+    });
+
+    // Surface any socket errors (gift failures, auth errors, etc.) as toasts
+    onGameError((data) => {
+      giftSending = false;
+      toast.error(data?.message || 'Something went wrong', { duration: 4000 });
     });
 
     window.addEventListener('keydown', handleKeyPress);
