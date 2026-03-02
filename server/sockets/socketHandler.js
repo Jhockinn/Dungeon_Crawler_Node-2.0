@@ -8,10 +8,8 @@ export function setupSockets(io) {
         const userId = socket.request.session?.userId;
         if (userId) connectedUsers.set(userId, socket);
 
-        // Put every authenticated socket in the global chat room
         socket.join('global');
 
-        // ── Global chat ──────────────────────────────────────
         socket.on('globalChat', ({ message }) => {
             const username = socket.request.session?.username;
             if (!username || !message?.trim()) return;
